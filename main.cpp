@@ -5,6 +5,7 @@
 #include <fstream>
 #include <string>
 #include <cstring>
+#include <cstdlib>
 #include <unistd.h>
 #include <vector>
 #include <stdexcept>
@@ -185,23 +186,23 @@ struct FieldSpecification {
 
 void print_join(const Options& options, const Line& line1, const Line& line2, const std::vector<FieldSpecification>& format) {
     bool first = true;
-    for (const auto& field : format) {
+    for (size_t i = 0; i < format.size(); i++) {
         if (!first) {
             std::cout.put(options.fieldSeparator);
         }
         first = false;
-        switch (field.source) {
+        switch (format[i].source) {
         case 0:
             // Nothing
             break;
         case 1:
-            if (field.column < line1.columns.size()) {
-                std::cout.write(&line1.data[line1.columns[field.column]], line1.lengths[field.column]);
+            if (format[i].column < line1.columns.size()) {
+                std::cout.write(&line1.data[line1.columns[format[i].column]], line1.lengths[format[i].column]);
             }
             break;
         case 2:
-            if (field.column < line2.columns.size()) {
-                std::cout.write(&line2.data[line2.columns[field.column]], line2.lengths[field.column]);
+            if (format[i].column < line2.columns.size()) {
+                std::cout.write(&line2.data[line2.columns[format[i].column]], line2.lengths[format[i].column]);
             }
             break;
         }
@@ -216,21 +217,22 @@ void get_formats(const Options& options,
                  std::vector<FieldSpecification>& format1  /* out */, 
                  std::vector<FieldSpecification>& format2  /* out */)
 {
-    format12.emplace_back(1, options.key1);
-    format1.emplace_back(1, options.key1);
-    format2.emplace_back(2, options.key2);
+    // Push instead of emplace to support older compilers.
+    format12.push_back(FieldSpecification(1, options.key1));
+    format1.push_back(FieldSpecification(1, options.key1));
+    format2.push_back(FieldSpecification(2, options.key2));
     for (size_t i = 0; i < line1.columns.size(); i++) {
         if (i != options.key1) {
-            format12.emplace_back(1, i);
-            format1.emplace_back(1, i);
-            format2.emplace_back(0, 0);
+            format12.push_back(FieldSpecification(1, i));
+            format1.push_back(FieldSpecification(1, i));
+            format2.push_back(FieldSpecification(0, 0));
         }
     }
     for (size_t i = 0; i < line2.columns.size(); i++) {
         if (i != options.key2) {
-            format12.emplace_back(2, i);
-            format1.emplace_back(0, 0);
-            format2.emplace_back(2, i);
+            format12.push_back(FieldSpecification(2, i));
+            format1.push_back(FieldSpecification(0, 0));
+            format2.push_back(FieldSpecification(2, i));
         }
     }
 }
