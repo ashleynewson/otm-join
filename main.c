@@ -7,6 +7,7 @@
 #include <cstring>
 #include <unistd.h>
 #include <vector>
+#include <stdexcept>
 
 struct Options {
     const char* filename1;
