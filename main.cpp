@@ -17,11 +17,12 @@ struct Options {
     bool stdin2;
     bool preserve1;
     bool preserve2;
-    bool show_join;
+    bool showJoin;
     size_t key1;
     size_t key2;
     char fieldSeparator;
     char lineSeparator;
+    bool trail;
 
     Options(int argc, char** argv): 
         filename1(""),
@@ -30,19 +31,20 @@ struct Options {
         stdin2(false),
         preserve1(false),
         preserve2(false),
-        show_join(true),
+        showJoin(true),
         key1(0),
         key2(0),
         fieldSeparator('\t'),
-        lineSeparator('\n')
+        lineSeparator('\n'),
+        trail(true)
     {
         int c;
-        while ((c = getopt(argc, argv, "a:v:1:2:t:l:z")) != -1) {
+        while ((c = getopt(argc, argv, "a:v:1:2:t:l:z:s")) != -1) {
             switch (c) {
             case 'v':
             case 'a':
                 if (c == 'v') {
-                    show_join = false;
+                    showJoin = false;
                 }
                 if (strcmp(optarg, "1") == 0) {
                     preserve1 = true;
@@ -68,6 +70,9 @@ struct Options {
                 break;
             case 'z':
                 lineSeparator = '\0';
+                break;
+            case 's':
+                trail = false;
                 break;
             default:
                 throw std::runtime_error("unknown option");
@@ -231,7 +236,9 @@ void get_formats(const Options& options,
     for (size_t i = 0; i < line2.columns.size(); i++) {
         if (i != options.key2) {
             format12.push_back(FieldSpecification(2, i));
-            format1.push_back(FieldSpecification(0, 0));
+            if (options.trail) {
+                format1.push_back(FieldSpecification(0, 0));
+            }
             format2.push_back(FieldSpecification(2, i));
         }
     }
@@ -250,8 +257,9 @@ void join_files(const Options& options, std::istream& file1, std::istream& file2
 
     get_formats(options, line1, line2, format12, format1, format2);
 
+    int order;
     while (true) {
-        int order = strcmp(&line1.data[line1.columns[options.key1]], &line2.data[line2.columns[options.key2]]);
+        order = strcmp(&line1.data[line1.columns[options.key1]], &line2.data[line2.columns[options.key2]]);
         if (order < 0) {
             if (options.preserve1) {
                 print_join(options, line1, line2, format1);
@@ -272,7 +280,7 @@ void join_files(const Options& options, std::istream& file1, std::istream& file2
         }
         else {
             while (order == 0) {
-                if (options.show_join) {
+                if (options.showJoin) {
                     print_join(options, line1, line2, format12);
                 }
                 line2.advance(options, file2);
@@ -295,6 +303,12 @@ void join_files(const Options& options, std::istream& file1, std::istream& file2
                 // file 1 ordering is not checked!
             }
         }
+    }
+
+    if (!line1.eof && order == 0) {
+        // In case we just did a join.
+        // We will have joined on some line2s, so we will have already used the current line1.
+        line1.advance(options, file1);
     }
     while (!line1.eof) {
         if (options.preserve1) {
