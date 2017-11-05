@@ -23,6 +23,7 @@ struct Options {
     char fieldSeparator;
     char lineSeparator;
     bool trail;
+    const char* format;
 
     Options(int argc, char** argv): 
         filename1(""),
@@ -36,10 +37,11 @@ struct Options {
         key2(0),
         fieldSeparator('\t'),
         lineSeparator('\n'),
-        trail(true)
+        trail(true),
+        format("")
     {
         int c;
-        while ((c = getopt(argc, argv, "a:v:1:2:t:l:z:s")) != -1) {
+        while ((c = getopt(argc, argv, "a:v:1:2:t:l:z:so:")) != -1) {
             switch (c) {
             case 'v':
             case 'a':
@@ -73,6 +75,9 @@ struct Options {
                 break;
             case 's':
                 trail = false;
+                break;
+            case 'o':
+                format = optarg;
                 break;
             default:
                 throw std::runtime_error("unknown option");
@@ -222,24 +227,90 @@ void get_formats(const Options& options,
                  std::vector<FieldSpecification>& format1  /* out */, 
                  std::vector<FieldSpecification>& format2  /* out */)
 {
-    // Push instead of emplace to support older compilers.
-    format12.push_back(FieldSpecification(1, options.key1));
-    format1.push_back(FieldSpecification(1, options.key1));
-    format2.push_back(FieldSpecification(2, options.key2));
-    for (size_t i = 0; i < line1.columns.size(); i++) {
-        if (i != options.key1) {
-            format12.push_back(FieldSpecification(1, i));
-            format1.push_back(FieldSpecification(1, i));
-            format2.push_back(FieldSpecification(0, 0));
-        }
-    }
-    for (size_t i = 0; i < line2.columns.size(); i++) {
-        if (i != options.key2) {
-            format12.push_back(FieldSpecification(2, i));
-            if (options.trail) {
+    if (strcmp(options.format, "") != 0) {
+        size_t i = 0;
+        size_t limit = strlen(options.format);
+        while(i < limit) {
+            switch (options.format[i]) {
+            case '0':
+                format12.push_back(FieldSpecification(1, options.key1));
+                format1.push_back(FieldSpecification(1, options.key1));
+                format2.push_back(FieldSpecification(2, options.key2));
+                i++;
+                if (options.format[i] != ',' && options.format[i] != '\0') {
+                    throw std::runtime_error("illegal output format");
+                }
+                i++; // ,
+                break;
+            case 't':
+                format12.push_back(FieldSpecification(0, 0));
                 format1.push_back(FieldSpecification(0, 0));
+                format2.push_back(FieldSpecification(0, 0));
+                i++;
+                if (options.format[i] != ',' && options.format[i] != '\0') {
+                    throw std::runtime_error("illegal output format");
+                }
+                i++; // ,
+                break;
+            case '1':
+            case '2':
+                {
+                    int l = options.format[i] - '0';
+                    i++;
+                    if (options.format[i] != '.') {
+                        throw std::runtime_error("illegal output format");
+                    }
+                    i++;
+                    if (options.format[i] == ',' || options.format[i] == '\0') {
+                        throw std::runtime_error("illegal output format");
+                    }
+                    int c = 0;
+                    for (; options.format[i] != ',' && options.format[i] != '\0'; i++) {
+                        if (options.format[i] < '0' || '9' < options.format[i]) {
+                            throw std::runtime_error("illegal output format");
+                        }
+                        c *= 10;
+                        c += options.format[i] - '0';
+                    }
+                    c--; // 1 indexing to 0 indexing
+                    format12.push_back(FieldSpecification(l, c));
+                    if (l == 1) {
+                        format1.push_back(FieldSpecification(l, c));
+                        format2.push_back(FieldSpecification(0, 0));
+                    } else {
+                        format1.push_back(FieldSpecification(0, 0));
+                        format2.push_back(FieldSpecification(l, c));
+                    }
+                    if (options.format[i] != ',' && options.format[i] != '\0') {
+                        throw std::runtime_error("illegal output format");
+                    }
+                    i++;
+                }
+                break;
+            default:
+                throw std::runtime_error("illegal output format");
             }
-            format2.push_back(FieldSpecification(2, i));
+        }
+    } else {
+        // Push instead of emplace to support older compilers.
+        format12.push_back(FieldSpecification(1, options.key1));
+        format1.push_back(FieldSpecification(1, options.key1));
+        format2.push_back(FieldSpecification(2, options.key2));
+        for (size_t i = 0; i < line1.columns.size(); i++) {
+            if (i != options.key1) {
+                format12.push_back(FieldSpecification(1, i));
+                format1.push_back(FieldSpecification(1, i));
+                format2.push_back(FieldSpecification(0, 0));
+            }
+        }
+        for (size_t i = 0; i < line2.columns.size(); i++) {
+            if (i != options.key2) {
+                format12.push_back(FieldSpecification(2, i));
+                if (options.trail) {
+                    format1.push_back(FieldSpecification(0, 0));
+                }
+                format2.push_back(FieldSpecification(2, i));
+            }
         }
     }
 }
