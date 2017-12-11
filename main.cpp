@@ -399,6 +399,7 @@ int main(int argc, char** argv) {
     Options options(argc, argv);
 
     std::ios_base::sync_with_stdio(false);
+    std::cin.tie(NULL);
 
     std::istream* file1 = options.stdin1 ? &std::cin : new std::ifstream(options.filename1);
     if (file1->fail()) {
