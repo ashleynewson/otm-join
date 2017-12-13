@@ -155,33 +155,6 @@ struct Line {
             }
         }
     }
-    // int advance(const Options& options, std::istream& file) {
-    //     data.clear();
-    //     columns.clear();
-    //     size_t got = file.getline(data.data(), data.capacity(), options.lineSeparator).gcount();
-    //     if (file.eof()) {
-    //         eof = true;
-    //     }
-    //     if (file.fail()) {
-    //         throw std::runtime_error("IO error");
-    //     }
-    //     if (file.gcount() == data.capacity()) {
-    //         // Slower, but rarely runs:
-    //         int c;
-    //         while ((c = file.get()) != options.lineSeparator) {
-    //             if (file.fail()) {
-    //                 throw std::runtime_error("IO error");
-    //             }
-    //             if (file.eof()) {
-    //                 break;
-    //             }
-    //             got++;
-    //             if (
-    //             data.push(c);
-    //         }
-    //     }
-    //     for (int i = 0; i
-    // }
 };
 
 struct FieldSpecification {
@@ -421,38 +394,6 @@ int main(int argc, char** argv) {
     if (file2 != &std::cin) {
         delete file2;
     }
-
-    // std::istream* file1;
-    // std::istream* file2;
-    // if (options.stdin1) {
-    //     file1 = &std::cin;
-    // } else {
-    //     std::ifstream* file = new std::ifstream(options.filename1);
-    //     if (file.fail()) {
-    //         delete file;
-    //         throw std::runtime_error("failed openning file 1");
-    //     }
-    //     file1 = file;
-    // }
-    // if (options.stdin2) {
-    //     file2 = &std::cin;
-    // } else {
-    //     std::ifstream* file = new std::ifstream(options.filename2);
-    //     if (file.fail()) {
-    //         delete file;
-    //         throw std::runtime_error("failed openning file 2");
-    //     }
-    //     file2 = file;
-    // }
-
-    // join_files(options, *file1, *file2);
-
-    // if (!options.stdin1) {
-    //     delete file1;
-    // }
-    // if (!options.stdin2) {
-    //     delete file2;
-    // }
 
     return 0;
 }
