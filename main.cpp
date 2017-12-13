@@ -333,27 +333,19 @@ void join_files(const Options& options, std::istream& file1, std::istream& file2
                 }
                 order = strcmp(&line1.data[line1.columns[options.key1]], &line2.data[line2.columns[options.key2]]);
             }
-            if (line2.eof) {
-                break;
-            }
-            if (order < 0) {
-                // Don't print - we've just joined
-                line1.advance(options, file1);
-                if (line2.eof) {
-                    break;
-                }
-            } else {
+            if (order > 0) {
+                // This check doesn't catch all file 2 misorderings.
                 throw std::runtime_error("bad ordering on file 2");
-                // file 1 ordering is not checked!
+                // file 1 ordering is not checked at all!
+            }
+            // Don't print - we've just joined
+            line1.advance(options, file1);
+            if (line1.eof || line2.eof) {
+                break;
             }
         }
     }
 
-    if (!line1.eof && order == 0) {
-        // In case we just did a join.
-        // We will have joined on some line2s, so we will have already used the current line1.
-        line1.advance(options, file1);
-    }
     while (!line1.eof) {
         if (options.preserve1) {
             print_join(options, line1, line2, format1);
