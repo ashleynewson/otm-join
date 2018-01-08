@@ -17,6 +17,8 @@ struct Options {
     bool stdin2;
     bool preserve1;
     bool preserve2;
+    bool subset1;
+    bool subset2;
     bool showJoin;
     size_t key1;
     size_t key2;
@@ -32,6 +34,8 @@ struct Options {
         stdin2(false),
         preserve1(false),
         preserve2(false),
+        subset1(false),
+        subset2(false),
         showJoin(true),
         key1(0),
         key2(0),
@@ -41,7 +45,7 @@ struct Options {
         format("")
     {
         int c;
-        while ((c = getopt(argc, argv, "a:v:1:2:t:l:z:so:")) != -1) {
+        while ((c = getopt(argc, argv, "a:v:c:1:2:t:l:z:so:")) != -1) {
             switch (c) {
             case 'v':
             case 'a':
@@ -56,6 +60,17 @@ struct Options {
                 }
                 else {
                     throw std::runtime_error("illegal -a or -v value");
+                }
+                break;
+            case 'c':
+                if (strcmp(optarg, "1") == 0) {
+                    subset1 = true;
+                }
+                else if (strcmp(optarg, "2") == 0) {
+                    subset2 = true;
+                }
+                else {
+                    throw std::runtime_error("illegal -c value");
                 }
                 break;
             case '1':
@@ -301,28 +316,22 @@ void join_files(const Options& options, std::istream& file1, std::istream& file2
 
     get_formats(options, line1, line2, format12, format1, format2);
 
+    // There are three different alignment modes:
+    //   # Correlated subset mode (subset1):
+    //       - Left keys are a subset of right keys.
+    //       - Matching keys appear in the same order in both files.
+    //   # Correlated subset mode (subset2):
+    //       - Right keys are a subset of left keys.
+    //       - Matching keys appear in the same order in both files.
+    //   # Dual-sorted mode (like gjoin):
+    //       - Both input files are sorted (using C locale).
+
+    bool sorted_mode = !(options.subset1 || options.subset2);
     int order;
     while (true) {
         order = strcmp(&line1.data[line1.columns[options.key1]], &line2.data[line2.columns[options.key2]]);
-        if (order < 0) {
-            if (options.preserve1) {
-                print_join(options, line1, line2, format1);
-            }
-            line1.advance(options, file1);
-            if (line1.eof) {
-                break;
-            }
-        }
-        else if (order > 0) {
-            if (options.preserve2) {
-                print_join(options, line1, line2, format2);
-            }
-            line2.advance(options, file2);
-            if (line2.eof) {
-                break;
-            }
-        }
-        else {
+        if (order == 0) {
+            // Equal keys found. Exhaust the run of equal keys...
             while (order == 0) {
                 if (options.showJoin) {
                     print_join(options, line1, line2, format12);
@@ -333,7 +342,7 @@ void join_files(const Options& options, std::istream& file1, std::istream& file2
                 }
                 order = strcmp(&line1.data[line1.columns[options.key1]], &line2.data[line2.columns[options.key2]]);
             }
-            if (order > 0) {
+            if (sorted_mode && order > 0) {
                 // This check doesn't catch all file 2 misorderings.
                 throw std::runtime_error("bad ordering on file 2");
                 // file 1 ordering is not checked at all!
@@ -343,6 +352,34 @@ void join_files(const Options& options, std::istream& file1, std::istream& file2
             if (line1.eof || line2.eof) {
                 break;
             }
+            // Neither line is on the same key as before.
+        }
+        else if (options.subset2 || (sorted_mode && order < 0)) {
+            if (options.subset1 && options.subset2) {
+                // If left and right key sets are both subsets of each other, they are the same.
+                // We should never get here if they are the same though.
+                throw std::runtime_error("files do not contain correlating keys");
+            }
+            if (options.preserve1) {
+                print_join(options, line1, line2, format1);
+            }
+            line1.advance(options, file1);
+            if (line1.eof) {
+                break;
+            }
+        }
+        else if (options.subset1 || (sorted_mode && order > 0)) {
+            if (options.preserve2) {
+                print_join(options, line1, line2, format2);
+            }
+            line2.advance(options, file2);
+            if (line2.eof) {
+                break;
+            }
+        }
+        else {
+            // Else this code is wrong :P
+            throw std::logic_error("reachability assertion failed");
         }
     }
 
