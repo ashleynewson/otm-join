@@ -361,31 +361,36 @@ void join_files(const Options& options, std::istream& file1, std::istream& file2
 }
 
 int main(int argc, char** argv) {
-    Options options(argc, argv);
+    try {
+        Options options(argc, argv);
 
-    std::ios_base::sync_with_stdio(false);
-    std::cin.tie(NULL);
+        std::ios_base::sync_with_stdio(false);
+        std::cin.tie(NULL);
 
-    std::istream* file1 = options.stdin1 ? &std::cin : new std::ifstream(options.filename1);
-    if (file1->fail()) {
-        delete file1;
-        throw std::runtime_error("failed to open file1");
+        std::istream* file1 = options.stdin1 ? &std::cin : new std::ifstream(options.filename1);
+        if (file1->fail()) {
+            delete file1;
+            throw std::runtime_error("failed to open file1");
+        }
+
+        std::istream* file2 = options.stdin2 ? &std::cin : new std::ifstream(options.filename2);
+        if (file2->fail()) {
+            delete file2;
+            throw std::runtime_error("failed to open file2");
+        }
+
+        join_files(options, *file1, *file2);
+
+        if (file1 != &std::cin) {
+            delete file1;
+        }
+        if (file2 != &std::cin) {
+            delete file2;
+        }
+
+        return 0;
+    } catch (const std::runtime_error& error) {
+        std::cerr << argv[0] << ": " << error.what() << std::endl;
+        return 1;
     }
-
-    std::istream* file2 = options.stdin2 ? &std::cin : new std::ifstream(options.filename2);
-    if (file2->fail()) {
-        delete file2;
-        throw std::runtime_error("failed to open file2");
-    }
-
-    join_files(options, *file1, *file2);
-
-    if (file1 != &std::cin) {
-        delete file1;
-    }
-    if (file2 != &std::cin) {
-        delete file2;
-    }
-
-    return 0;
 }
