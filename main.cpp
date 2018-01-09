@@ -20,6 +20,7 @@ struct Options {
     bool subset1;
     bool subset2;
     bool showJoin;
+    bool manyToOne;
     size_t key1;
     size_t key2;
     char fieldSeparator;
@@ -37,6 +38,7 @@ struct Options {
         subset1(false),
         subset2(false),
         showJoin(true),
+        manyToOne(false),
         key1(0),
         key2(0),
         fieldSeparator('\t'),
@@ -45,7 +47,7 @@ struct Options {
         format("")
     {
         int c;
-        while ((c = getopt(argc, argv, "a:v:c:1:2:t:l:z:so:")) != -1) {
+        while ((c = getopt(argc, argv, "a:v:c:1:2:t:l:z:rso:")) != -1) {
             switch (c) {
             case 'v':
             case 'a':
@@ -87,6 +89,9 @@ struct Options {
                 break;
             case 'z':
                 lineSeparator = '\0';
+                break;
+            case 'r':
+                manyToOne = true;
                 break;
             case 's':
                 trail = false;
@@ -303,19 +308,41 @@ void get_formats(const Options& options,
     }
 }
 
-void join_files(const Options& options, std::istream& file1, std::istream& file2) {
-    Line line1;
-    Line line2;
+std::vector<FieldSpecification> swap_format_files(const std::vector<FieldSpecification>& original) {
+    std::vector<FieldSpecification> swapped(original);
+    for (size_t i = 0; i < swapped.size(); i++) {
+        switch (original[i].source) {
+        case 1:
+            swapped[i].source = 2;
+            break;
+        case 2:
+            swapped[i].source = 1;
+            break;
+        default:
+            // Do nothing. We only care about 1 and 2.
+            break;
+        }
+    }
+    return swapped;
+}
 
-    std::vector<FieldSpecification> format12;
-    std::vector<FieldSpecification> format1;
-    std::vector<FieldSpecification> format2;
-
-    line1.advance(options, file1);
-    line2.advance(options, file2);
-
-    get_formats(options, line1, line2, format12, format1, format2);
-
+// This function is tightly coupled with join_files().
+void join_loop(const Options& options,
+               std::istream& file1, // One (not necessarily left file)
+               std::istream& file2, // Many (not necessarily right file)
+               Line& line1,
+               Line& line2,
+               const std::vector<FieldSpecification>& format12,
+               const std::vector<FieldSpecification>& format1,
+               const std::vector<FieldSpecification>& format2,
+               size_t key1,
+               size_t key2,
+               bool subset1,
+               bool subset2,
+               bool preserve1,
+               bool preserve2
+               )
+{
     // There are three different alignment modes:
     //   # Correlated subset mode (subset1):
     //       - Left keys are a subset of right keys.
@@ -326,10 +353,10 @@ void join_files(const Options& options, std::istream& file1, std::istream& file2
     //   # Dual-sorted mode (like gjoin):
     //       - Both input files are sorted (using C locale).
 
-    bool sorted_mode = !(options.subset1 || options.subset2);
+    bool sorted_mode = !(subset1 || subset2);
     int order;
     while (true) {
-        order = strcmp(&line1.data[line1.columns[options.key1]], &line2.data[line2.columns[options.key2]]);
+        order = strcmp(&line1.data[line1.columns[key1]], &line2.data[line2.columns[key2]]);
         if (order == 0) {
             // Equal keys found. Exhaust the run of equal keys...
             while (order == 0) {
@@ -340,7 +367,7 @@ void join_files(const Options& options, std::istream& file1, std::istream& file2
                 if (line2.eof) {
                     break;
                 }
-                order = strcmp(&line1.data[line1.columns[options.key1]], &line2.data[line2.columns[options.key2]]);
+                order = strcmp(&line1.data[line1.columns[key1]], &line2.data[line2.columns[key2]]);
             }
             if (sorted_mode && order > 0) {
                 // This check doesn't catch all file 2 misorderings.
@@ -354,13 +381,13 @@ void join_files(const Options& options, std::istream& file1, std::istream& file2
             }
             // Neither line is on the same key as before.
         }
-        else if (options.subset2 || (sorted_mode && order < 0)) {
-            if (options.subset1 && options.subset2) {
+        else if (subset2 || (sorted_mode && order < 0)) {
+            if (subset1 && subset2) {
                 // If left and right key sets are both subsets of each other, they are the same.
                 // We should never get here if they are the same though.
                 throw std::runtime_error("files do not contain correlating keys");
             }
-            if (options.preserve1) {
+            if (preserve1) {
                 print_join(options, line1, line2, format1);
             }
             line1.advance(options, file1);
@@ -368,8 +395,8 @@ void join_files(const Options& options, std::istream& file1, std::istream& file2
                 break;
             }
         }
-        else if (options.subset1 || (sorted_mode && order > 0)) {
-            if (options.preserve2) {
+        else if (subset1 || (sorted_mode && order > 0)) {
+            if (preserve2) {
                 print_join(options, line1, line2, format2);
             }
             line2.advance(options, file2);
@@ -384,16 +411,69 @@ void join_files(const Options& options, std::istream& file1, std::istream& file2
     }
 
     while (!line1.eof) {
-        if (options.preserve1) {
+        if (preserve1) {
             print_join(options, line1, line2, format1);
         }
         line1.advance(options, file1);
     }
     while (!line2.eof) {
-        if (options.preserve2) {
+        if (preserve2) {
             print_join(options, line1, line2, format2);
         }
         line2.advance(options, file2);
+    }
+}
+
+void join_files(const Options& options, std::istream& file1, std::istream& file2) {
+    Line line1;
+    Line line2;
+
+    std::vector<FieldSpecification> format12;
+    std::vector<FieldSpecification> format1;
+    std::vector<FieldSpecification> format2;
+
+    line1.advance(options, file1);
+    line2.advance(options, file2);
+
+    get_formats(options, line1, line2, format12, format1, format2);
+
+    if (options.manyToOne) {
+        // For the main processing code, file1 must always have unique
+        // keys. file2 may have duplicate (but grouped) keys.
+
+        // So, swap everything around.
+        join_loop(options,
+                  file2,
+                  file1,
+                  line2,
+                  line1,
+                  swap_format_files(format12),
+                  swap_format_files(format2),
+                  swap_format_files(format1),
+                  options.key2,
+                  options.key1,
+                  options.subset2,
+                  options.subset1,
+                  options.preserve2,
+                  options.preserve1
+                  );
+    } else {
+        // Normal, one-to-many
+        join_loop(options,
+                  file1,
+                  file2,
+                  line1,
+                  line2,
+                  format12,
+                  format1,
+                  format2,
+                  options.key1,
+                  options.key2,
+                  options.subset1,
+                  options.subset2,
+                  options.preserve1,
+                  options.preserve2
+                  );
     }
 }
 
