@@ -10,6 +10,43 @@
 #include <vector>
 #include <stdexcept>
 
+const char* help_string =
+    "otm-join [OPTION]... FILE1 FILE2\n"
+    "\n"
+    "Options:\n"
+    "    -1 FIELD\n"
+    "        Join on this field of file 1\n"
+    "    -2 FIELD\n"
+    "        Join on this field of file 2\n"
+    "    -a FILENUM\n"
+    "        Print unpairable rows from file FILENUM\n"
+    "    -c FILENUM\n"
+    "        Specify that file FILENUM's keys are a correlated subset of the other.\n"
+    "        Allows unsorted files with aligned rows/keys to be joined directly.\n"
+    "    -j FIELD\n"
+    "        Equivalent to -1 FIELD -2 FIELD\n"
+    "    -l CHAR\n"
+    "        Use CHAR as row separator (default is UNIX newline)\n"
+    "    -o FORMAT\n"
+    "        Use FORMAT for row output (see below)\n"
+    "    -r\n"
+    "        Use many-to-one join, rather than one-to-many\n"
+    "    -s\n"
+    "        Don't trail field separators on unpaired rows\n"
+    "    -t CHAR\n"
+    "        Use CHAR as field separator (default is tab)\n"
+    "    -v FILENUM\n"
+    "        Print only unpairable rows from file FILENUM (suppress joins)\n"
+    "    -z\n"
+    "        Use NUL character as row separator\n"
+    "\n"
+    "FORMAT is a comma-separated list of fields to output.\n"
+    "E.g. 0,1.3,t,2.4\n"
+    "  Print the joined field, file1's 3rd field, a blank field, file2's 4th field.\n"
+    "The default format is the joined field first, followed by the remaining fields\n"
+    "from file 1 and then file 2.\n"
+    ;
+
 struct Options {
     const char* filename1;
     const char* filename2;
@@ -27,6 +64,12 @@ struct Options {
     char lineSeparator;
     bool trail;
     const char* format;
+
+    struct UsageException : public std::runtime_error {
+        UsageException(const std::string& what_arg):
+            std::runtime_error(what_arg)
+        {}
+    };
 
     Options(int argc, char** argv): 
         filename1(""),
@@ -61,7 +104,7 @@ struct Options {
                     preserve2 = true;
                 }
                 else {
-                    throw std::runtime_error("illegal -a or -v value");
+                    throw UsageException("illegal -a or -v value");
                 }
                 break;
             case 'c':
@@ -72,7 +115,7 @@ struct Options {
                     subset2 = true;
                 }
                 else {
-                    throw std::runtime_error("illegal -c value");
+                    throw UsageException("illegal -c value");
                 }
                 break;
             case '1':
@@ -104,18 +147,18 @@ struct Options {
                 format = optarg;
                 break;
             default:
-                throw std::runtime_error("unknown option");
+                throw UsageException("bad usage");
             }
         }
         if (argc - optind != 2) {
-            throw std::runtime_error("need exactly two files");
+            throw UsageException("need exactly two files");
         }
         filename1 = argv[optind];
         stdin1 = (strcmp(filename1, "-") == 0);
         filename2 = argv[optind+1];
         stdin2 = (strcmp(filename2, "-") == 0);
         if (stdin1 && stdin2) {
-            throw std::runtime_error("cannot use stdin twice");
+            throw UsageException("cannot use stdin twice");
         }
     }
 };
@@ -510,6 +553,10 @@ int main(int argc, char** argv) {
         }
 
         return 0;
+    } catch (const Options::UsageException& error) {
+        std::cerr << argv[0] << ": " << error.what() << std::endl;
+        std::cerr << help_string << std::flush;
+        return 1;
     } catch (const std::runtime_error& error) {
         std::cerr << argv[0] << ": " << error.what() << std::endl;
         return 1;
