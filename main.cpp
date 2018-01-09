@@ -47,7 +47,7 @@ struct Options {
         format("")
     {
         int c;
-        while ((c = getopt(argc, argv, "a:v:c:1:2:t:l:z:rso:")) != -1) {
+        while ((c = getopt(argc, argv, "a:v:c:1:2:j:t:l:z:rso:")) != -1) {
             switch (c) {
             case 'v':
             case 'a':
@@ -80,6 +80,10 @@ struct Options {
                 break;
             case '2':
                 key2 = size_t(atoi(optarg) - 1); // I have no patience.
+                break;
+            case 'j':
+                key1 = size_t(atoi(optarg) - 1);
+                key2 = size_t(atoi(optarg) - 1);
                 break;
             case 't':
                 fieldSeparator = optarg[0];
