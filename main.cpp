@@ -390,70 +390,72 @@ void join_loop(const Options& options,
                bool preserve2
                )
 {
-    // There are three different alignment modes:
-    //   # Correlated subset mode (subset1):
-    //       - Left keys are a subset of right keys.
-    //       - Matching keys appear in the same order in both files.
-    //   # Correlated subset mode (subset2):
-    //       - Right keys are a subset of left keys.
-    //       - Matching keys appear in the same order in both files.
-    //   # Dual-sorted mode (like gjoin):
-    //       - Both input files are sorted (using C locale).
+    if (!line1.eof && !line2.eof) {
+        // There are three different alignment modes:
+        //   # Correlated subset mode (subset1):
+        //       - Left keys are a subset of right keys.
+        //       - Matching keys appear in the same order in both files.
+        //   # Correlated subset mode (subset2):
+        //       - Right keys are a subset of left keys.
+        //       - Matching keys appear in the same order in both files.
+        //   # Dual-sorted mode (like gjoin):
+        //       - Both input files are sorted (using C locale).
 
-    bool sorted_mode = !(subset1 || subset2);
-    int order;
-    while (true) {
-        order = strcmp(&line1.data[line1.columns[key1]], &line2.data[line2.columns[key2]]);
-        if (order == 0) {
-            // Equal keys found. Exhaust the run of equal keys...
-            while (order == 0) {
-                if (options.showJoin) {
-                    print_join(options, line1, line2, format12);
+        bool sorted_mode = !(subset1 || subset2);
+        int order;
+        while (true) {
+            order = strcmp(&line1.data[line1.columns[key1]], &line2.data[line2.columns[key2]]);
+            if (order == 0) {
+                // Equal keys found. Exhaust the run of equal keys...
+                while (order == 0) {
+                    if (options.showJoin) {
+                        print_join(options, line1, line2, format12);
+                    }
+                    line2.advance(options, file2);
+                    if (line2.eof) {
+                        break;
+                    }
+                    order = strcmp(&line1.data[line1.columns[key1]], &line2.data[line2.columns[key2]]);
+                }
+                if (sorted_mode && order > 0) {
+                    // This check doesn't catch all file 2 misorderings.
+                    throw std::runtime_error("bad ordering on file 2");
+                    // file 1 ordering is not checked at all!
+                }
+                // Don't print - we've just joined
+                line1.advance(options, file1);
+                if (line1.eof || line2.eof) {
+                    break;
+                }
+                // Neither line is on the same key as before.
+            }
+            else if (subset2 || (sorted_mode && order < 0)) {
+                if (subset1 && subset2) {
+                    // If left and right key sets are both subsets of each other, they are the same.
+                    // We should never get here if they are the same though.
+                    throw std::runtime_error("files do not contain correlating keys");
+                }
+                if (preserve1) {
+                    print_join(options, line1, line2, format1);
+                }
+                line1.advance(options, file1);
+                if (line1.eof) {
+                    break;
+                }
+            }
+            else if (subset1 || (sorted_mode && order > 0)) {
+                if (preserve2) {
+                    print_join(options, line1, line2, format2);
                 }
                 line2.advance(options, file2);
                 if (line2.eof) {
                     break;
                 }
-                order = strcmp(&line1.data[line1.columns[key1]], &line2.data[line2.columns[key2]]);
             }
-            if (sorted_mode && order > 0) {
-                // This check doesn't catch all file 2 misorderings.
-                throw std::runtime_error("bad ordering on file 2");
-                // file 1 ordering is not checked at all!
+            else {
+                // Else this code is wrong :P
+                throw std::logic_error("reachability assertion failed");
             }
-            // Don't print - we've just joined
-            line1.advance(options, file1);
-            if (line1.eof || line2.eof) {
-                break;
-            }
-            // Neither line is on the same key as before.
-        }
-        else if (subset2 || (sorted_mode && order < 0)) {
-            if (subset1 && subset2) {
-                // If left and right key sets are both subsets of each other, they are the same.
-                // We should never get here if they are the same though.
-                throw std::runtime_error("files do not contain correlating keys");
-            }
-            if (preserve1) {
-                print_join(options, line1, line2, format1);
-            }
-            line1.advance(options, file1);
-            if (line1.eof) {
-                break;
-            }
-        }
-        else if (subset1 || (sorted_mode && order > 0)) {
-            if (preserve2) {
-                print_join(options, line1, line2, format2);
-            }
-            line2.advance(options, file2);
-            if (line2.eof) {
-                break;
-            }
-        }
-        else {
-            // Else this code is wrong :P
-            throw std::logic_error("reachability assertion failed");
         }
     }
 
